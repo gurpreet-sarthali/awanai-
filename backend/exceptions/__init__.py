@@ -1,0 +1,1 @@
+"""API exception definitions and handlers."""

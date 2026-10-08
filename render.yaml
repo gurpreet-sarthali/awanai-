@@ -1,0 +1,109 @@
+# AskMyData — Render.com Deployment Configuration
+# https://render.com/docs/yaml-spec
+#
+# Deploy both frontend (static site) and backend (web service) from one repo.
+# Each service reads environment variables set in the Render dashboard.
+
+services:
+
+  # ─── Backend: FastAPI ────────────────────────────────────────────────────────
+  - type: web
+    name: askmydata-api
+    runtime: python
+    region: oregon          # or: frankfurt, singapore, ohio
+    plan: free              # upgrade to starter ($7/mo) for always-on
+    rootDir: .              # project root
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      # ── Database ──────────────────────────────────────────────────────────
+      - key: MYSQL_HOST
+        sync: false          # set manually in Render dashboard
+      - key: MYSQL_PORT
+        value: "3306"
+      - key: MYSQL_USER
+        sync: false
+      - key: MYSQL_PASSWORD
+        sync: false
+      - key: MYSQL_DATABASE
+        value: askmydata
+      # ── JWT ───────────────────────────────────────────────────────────────
+      - key: JWT_SECRET_KEY
+        generateValue: true  # Render generates a random secret automatically
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "60"
+      # ── OAuth CSRF ────────────────────────────────────────────────────────
+      - key: OAUTH_STATE_SECRET
+        generateValue: true
+      # ── Google OAuth ──────────────────────────────────────────────────────
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false          # https://askmydata.onrender.com/auth/google/callback
+      - key: MAX_LOGIN_ATTEMPTS
+        value: "5"
+      # ── Gemini AI ─────────────────────────────────────────────────────────
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: AI_MAX_REQUESTS_PER_MINUTE
+        value: "10"
+      - key: AI_MAX_REQUESTS_PER_DAY
+        value: "100"
+      # ── Supabase ──────────────────────────────────────────────────────────
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      # ── CORS: set to your Render static site URL ──────────────────────────
+      - key: CORS_ORIGINS
+        sync: false          # https://askmydata.onrender.com
+      # ── Limits ────────────────────────────────────────────────────────────
+      - key: MAX_UPLOAD_SIZE_MB
+        value: "25"
+      - key: MAX_CSV_ROWS
+        value: "200000"
+      - key: MAX_CSV_COLUMNS
+        value: "200"
+      - key: DATASET_UPLOADS_DIR
+        value: data/uploads
+
+  # ─── Frontend: React/Vite Static Site ────────────────────────────────────────
+  - type: web
+    name: askmydata
+    runtime: static
+    region: oregon
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    # Rewrite all routes to index.html for SPA client-side routing
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+    envVars:
+      - key: VITE_API_BASE_URL
+        sync: false          # https://askmydata-api.onrender.com

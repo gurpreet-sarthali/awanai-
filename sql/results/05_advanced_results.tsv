@@ -1,0 +1,31 @@
+﻿Internship_Experience	student_count	placement_rate_pct
+No	6036	16.76607
+Yes	3964	16.32190
+internship_rate_pct	no_internship_rate_pct	rate_difference_points
+16.32190	16.76607	-0.44417
+cgpa_group	student_count	placement_rate_pct	rate_rank
+8 to <9	2040	33.97059	1
+9+	2064	33.13953	2
+7 to <8	2020	5.00000	3
+Below 6	1946	4.67626	4
+6 to <7	1930	4.66321	5
+Projects_Completed	student_count	group_rate_pct	overall_rate_pct	difference_points
+0	1688	2.66588	16.59000	-13.92412
+1	1609	2.05096	16.59000	-14.53904
+2	1681	24.21178	16.59000	7.62178
+3	1627	23.90904	16.59000	7.31904
+4	1693	22.50443	16.59000	5.91443
+5	1702	23.73678	16.59000	7.14678
+Communication_Skills	student_count	placement_rate_pct
+9	1016	41.04331
+8	1000	39.80000
+10	1103	37.26201
+1	980	7.14286
+3	955	6.70157
+2	1008	6.64683
+4	1017	6.19469
+7	984	5.99593
+6	942	5.94480
+5	995	5.42714
+placed_projects	not_placed_projects	project_difference	communication_difference	cgpa_difference	iq_difference
+3.3502	2.3470	1.0033	2.5199	1.270956	11.5693

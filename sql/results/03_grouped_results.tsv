@@ -1,0 +1,62 @@
+﻿Internship_Experience	student_count	placed_count
+No	6036	1012
+Yes	3964	647
+Internship_Experience	placement_rate_pct
+No	16.76607
+Yes	16.32190
+Placement	average_cgpa
+No	7.321527
+Yes	8.592483
+Placement	average_iq
+No	97.5525
+Yes	109.1218
+Placement	average_projects
+No	2.3470
+Yes	3.3502
+Academic_Performance	placement_rate_pct
+1	17.65317
+2	16.78392
+3	17.65893
+4	18.72510
+5	16.11910
+6	14.84848
+7	14.50828
+8	16.87805
+9	16.51469
+10	16.28352
+Communication_Skills	placement_rate_pct
+1	7.14286
+2	6.64683
+3	6.70157
+4	6.19469
+5	5.42714
+6	5.94480
+7	5.99593
+8	39.80000
+9	41.04331
+10	37.26201
+Extra_Curricular_Score	placement_rate_pct
+0	16.79225
+1	18.93688
+2	15.57286
+3	15.95855
+4	16.08549
+5	17.67241
+6	15.01706
+7	17.19101
+8	15.46724
+9	16.46409
+10	17.34694
+Projects_Completed	placement_rate_pct
+0	2.66588
+1	2.05096
+2	24.21178
+3	23.90904
+4	22.50443
+5	23.73678
+cgpa_group	placement_rate_pct
+Below 6	4.67626
+6 to <7	4.66321
+7 to <8	5.00000
+8 to <9	33.97059
+9+	33.13953

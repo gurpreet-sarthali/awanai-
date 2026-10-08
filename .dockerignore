@@ -1,0 +1,16 @@
+.git
+.gitignore
+.env
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+node_modules
+frontend/dist
+frontend/node_modules
+docs
+*.pdf
+ AskMyData_Project_Brief_Master_Prompt.pdf
+*.log
