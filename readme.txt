@@ -865,6 +865,8 @@ PHASE 21  Testing
 PHASE 22  Deployment
    ↓
 PHASE 23  Final Polish
+   ↓
+PHASE 24  Advanced Search & Dataset Catalog
 MVP vs Final Project
 Don't build all 23 phases immediately.
 MVP — first target
@@ -921,3 +923,11 @@ Kaggle CSV
 → verify relationships
 That becomes our first milestone: a clean, trustworthy MySQL database ready for analytics.
 
+________________________________________
+PHASE 24 — Advanced Search, Dataset Discovery & Unified Data Catalog
+Goal: Build a unified discovery and search system for AskMyData.
+- Global search for datasets, conversations, saved queries, reports, and workspaces.
+- Dataset Catalog and Dataset Discovery pages.
+- Advanced filters, sorting, and suggestions.
+- Favorites, bookmarks, tags, and search history.
+- Granular permission-aware search and UI.

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BarChart3, CalendarClock, Clock, Code, Database, Download, FileText, Gauge, Home, LogOut, MessageSquare, MessageSquareText, Moon, Plus, RefreshCw, Send, Shield, Sun, ThumbsDown, ThumbsUp, Trash2, Upload } from 'lucide-react';
+import { BarChart3, CalendarClock, Clock, Code, Database, Download, FileText, Gauge, Home, LogOut, MessageSquare, MessageSquareText, Moon, Plus, RefreshCw, Send, Shield, Sun, ThumbsDown, ThumbsUp, Trash2, Upload, Search, Library } from 'lucide-react';
 import { DatasetSelector } from './components/DatasetSelector';
 import { UserFeedbackModal } from './components/UserFeedbackModal';
 import { AdminDashboard } from './components/AdminDashboard';
 import { DeveloperDashboard } from './components/DeveloperDashboard';
 import { QueryHistory } from './components/QueryHistory';
+import { SearchPage } from './components/SearchPage';
+import { CatalogPage } from './components/CatalogPage';
 import { submitAIMessageFeedback } from './services/monitoringApi';
 import { useAuth } from './context/AuthContext';
 import { useTheme } from './context/ThemeContext';
@@ -49,7 +51,7 @@ import { generateChart } from './services/visualizationApi';
 import type { AnalyticsOperation, ChartMetadata } from './types/api';
 import './styles.css';
 
-const nav = [['/', 'Overview', Home], ['/dashboard', 'Dashboard', Gauge], ['/dataset', 'Dataset', Database], ['/analytics', 'Analytics', BarChart3], ['/ask', 'Ask your data', MessageSquareText], ['/history', 'Query History', Clock], ['/automations', 'Automations', CalendarClock], ['/billing', 'Billing', Shield], ['/developer', 'Developer', Code]] as const;
+const nav = [['/', 'Overview', Home], ['/dashboard', 'Dashboard', Gauge], ['/catalog', 'Catalog', Library], ['/dataset', 'Dataset', Database], ['/search', 'Search', Search], ['/analytics', 'Analytics', BarChart3], ['/ask', 'Ask your data', MessageSquareText], ['/history', 'Query History', Clock], ['/automations', 'Automations', CalendarClock], ['/billing', 'Billing', Shield], ['/developer', 'Developer', Code]] as const;
 const placementOperations: [AnalyticsOperation, string][] = [
   ['placement_by_internship', 'Internship analysis'],
   ['placement_by_cgpa_group', 'CGPA analysis'],
@@ -141,7 +143,7 @@ function Shell({ children, active, datasetId, setDatasetId }: PageProps & { chil
             <button className="btn-secondary" style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }} onClick={() => setFeedbackOpen(true)}>
               <MessageSquare size={14} style={{ marginRight: '0.35rem' }} /> Send Feedback
             </button>
-            <span className="phase-tag">Phase 23 · Final Polish</span>
+            <span className="phase-tag">Phase 24 · Search & Catalog</span>
           </div>
         </header>
         {children}
@@ -1197,6 +1199,15 @@ function HistoryPage(props: PageProps) {
   );
 }
 
+// ─── Search & Catalog Routes (Phase 24) ───────────────────────────────────────
+function CatalogRoute(props: PageProps) {
+  return <Shell {...props} active="/catalog"><CatalogPage /></Shell>;
+}
+
+function SearchRoute(props: PageProps) {
+  return <Shell {...props} active="/search"><SearchPage /></Shell>;
+}
+
 // ─── App Router ────────────────────────────────────────────────────────────────
 function App() {
   const { datasetId, setDatasetId } = useSelectedDataset();
@@ -1219,7 +1230,9 @@ function App() {
 
   // Protected routes — wrap in RequireAuth for extra safety
   if (path === '/dashboard') return <RequireAuth><DashboardPage {...props} /></RequireAuth>;
+  if (path === '/catalog') return <RequireAuth><CatalogRoute {...props} /></RequireAuth>;
   if (path === '/dataset') return <RequireAuth><DatasetPage {...props} /></RequireAuth>;
+  if (path.startsWith('/search')) return <RequireAuth><SearchRoute {...props} /></RequireAuth>;
   if (path === '/analytics') return <RequireAuth><AnalyticsPage {...props} /></RequireAuth>;
   if (path === '/ask') return <RequireAuth><AskPage {...props} /></RequireAuth>;
   if (path === '/history') return <RequireAuth><HistoryPage {...props} /></RequireAuth>;

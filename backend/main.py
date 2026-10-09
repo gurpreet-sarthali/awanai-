@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.api.dependencies import get_monitoring_service
-from backend.api.routes import admin, ai, analytics, auth, automations, billing, chat, dataset, datasets, developer, feedback, health, nlsql, visualization, workspaces
+from backend.api.routes import admin, ai, analytics, auth, automations, billing, chat, dataset, datasets, developer, feedback, health, nlsql, search, visualization, workspaces
 from backend.core.config import settings
 from backend.core.logging import configure_logging
 from backend.exceptions.handlers import AppError, app_error_handler, unexpected_error_handler, validation_error_handler
@@ -61,6 +61,8 @@ app.include_router(automations.router, prefix="/api/v1")
 app.include_router(automations.snapshots_router, prefix="/api/v1")
 app.include_router(developer.developer_router, prefix="/api/v1")
 app.include_router(developer.public_router, prefix="/api/v1")
+app.include_router(search.search_router, prefix="/api/v1")
+app.include_router(search.catalog_router, prefix="/api/v1")
 app.include_router(feedback.router)
 app.include_router(billing.router)
 app.include_router(admin.router)
