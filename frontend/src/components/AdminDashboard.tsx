@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Activity, AlertTriangle, BarChart3, CheckCircle, Database, RefreshCw, Shield, Users } from 'lucide-react';
-import { getAdminAnalytics, triggerLogCleanup } from '../services/monitoringApi';
+import { getAdminAnalytics, getVisitorStats, triggerLogCleanup, type VisitorStats } from '../services/monitoringApi';
 import { AdminDashboardData } from '../types/monitoring';
 import { getAutomationAdminOverview, getAutomationAdminRuns, type AutomationAdminOverview, type AutomationAdminRun } from '../services/automationApi';
 
@@ -21,12 +21,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onBack: _
   const [automationRuns, setAutomationRuns] = useState<AutomationAdminRun[]>([]);
   const [automationStatus, setAutomationStatus] = useState('');
   const [automationWorkspace, setAutomationWorkspace] = useState('');
+  const [visitorStats, setVisitorStats] = useState<VisitorStats | null>(null);
 
   const fetchDashboard = async () => {
     setLoading(true);
     setError(null);
     try {
-      const [res, automationSummary, runs] = await Promise.all([
+      const [res, automationSummary, runs, vStats] = await Promise.all([
         getAdminAnalytics(token, days),
         getAutomationAdminOverview(),
         getAutomationAdminRuns({
@@ -35,10 +36,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onBack: _
           workspace_id: automationWorkspace || undefined,
           limit: 100,
         }),
+        getVisitorStats(token).catch(() => null),
       ]);
       setData(res);
       setAutomationOverview(automationSummary);
       setAutomationRuns(runs);
+      if (vStats) setVisitorStats(vStats);
     } catch (err: any) {
       setError(err?.message || 'Failed to load admin dashboard telemetry.');
     } finally {
@@ -135,6 +138,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onBack: _
           </div>
           <div className="metric-value">{overview ? `${overview.ai_helpfulness_rate}%` : '...'}</div>
           <div className="metric-subtext">Avg Response: {overview?.avg_ai_response_time_ms || 0} ms</div>
+        </div>
+
+        <div className="metric-card">
+          <div className="metric-header">
+            <span className="metric-title">Registered Visitors</span>
+            <Users className="metric-icon users-color" size={20} />
+          </div>
+          <div className="metric-value">{visitorStats ? visitorStats.total_visitors : '...'}</div>
+          <div className="metric-subtext">
+            Today: {visitorStats?.visitors_today ?? '—'} &nbsp;·&nbsp; Last 7d: {visitorStats?.visitors_last_7_days ?? '—'}
+            {visitorStats && (
+              <span style={{ marginLeft: '0.5rem', fontSize: '0.7rem', color: visitorStats.supabase_connected ? '#4ade80' : '#f87171' }}>
+                ● {visitorStats.supabase_connected ? 'Supabase live' : 'Supabase offline'}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

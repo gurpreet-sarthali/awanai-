@@ -40,6 +40,8 @@ class DatasetManagementService:
     def get_dataset(self, dataset_id: str) -> dict[str, Any]:
         record = self._require_ready_or_metadata(dataset_id)
         validation = self._validation_summary(dataset_id, record)
+        created_at_val = record.created_at.isoformat() if hasattr(record.created_at, "isoformat") else str(record.created_at)
+        updated_at_val = record.updated_at.isoformat() if hasattr(record.updated_at, "isoformat") else str(record.updated_at)
         return {
             "dataset_id": record.dataset_id,
             "dataset_name": record.dataset_name,
@@ -48,8 +50,8 @@ class DatasetManagementService:
             "columns": record.column_count,
             "status": record.status,
             "is_builtin": record.is_builtin,
-            "created_at": record.created_at.isoformat(),
-            "updated_at": record.updated_at.isoformat(),
+            "created_at": created_at_val,
+            "updated_at": updated_at_val,
             "validation": validation,
         }
 
@@ -98,13 +100,12 @@ class DatasetManagementService:
             deleted = self.registry.delete_dataset(dataset_id)
             
         if record.storage_reference and not record.is_builtin:
-            if self.access and self.access.user.google_access_token:
-                from backend.services.google_drive_service import GoogleDriveService, GoogleDriveError
-                drive_service = GoogleDriveService(self.access.user.google_access_token)
-                try:
-                    drive_service.delete_file(record.storage_reference)
-                except GoogleDriveError:
-                    pass # Ignore if it's already deleted or access denied
+            local_path = self.uploads_root / record.storage_reference
+            try:
+                if local_path.is_file():
+                    local_path.unlink()
+            except Exception:
+                pass
                     
         return {"dataset_id": deleted.dataset_id, "status": "DELETED"}
 
@@ -113,35 +114,33 @@ class DatasetManagementService:
         dataset_id = self.registry.generate_dataset_id()
         internal_table = self.registry.generate_internal_table_name(dataset_id)
         
-        # Determine user and upload to Google Drive
-        user_id = self.access.user.id if self.access else None
-        if not user_id:
-            raise DatasetManagementError("Authentication required for Google Drive upload.")
-            
-        from backend.services.google_drive_service import GoogleDriveService, GoogleDriveError
-        access_token = self.access.user.google_access_token
-        if not access_token:
-            raise DatasetManagementError("Google account linkage is required to upload files.")
-            
-        drive_service = GoogleDriveService(access_token)
-        try:
-            drive_info = drive_service.upload_csv(filename, content)
-        except GoogleDriveError as e:
-            if e.status_code == 401:
-                # Need to implement a way to refresh or just prompt user to re-login
-                raise DatasetManagementError("Google Drive access token expired. Please log out and log in again with Google.") from e
-            raise DatasetManagementError(f"Failed to upload to Google Drive: {e.message}") from e
+        # Determine user/visitor ID
+        user_id = self.access.user.id if self.access else "visitor_default"
+        
+        # Safe directory and filename handling (prevents path traversal)
+        safe_user_folder = "".join(c for c in user_id if c.isalnum() or c in ("-", "_")) or "default"
+        user_dir = self.uploads_root / safe_user_folder
+        user_dir.mkdir(parents=True, exist_ok=True)
+        
+        raw_stem = Path(filename).stem
+        safe_stem = "".join(c for c in raw_stem if c.isalnum() or c in ("-", "_", " "))[:64].strip() or "dataset"
+        safe_filename = f"{dataset_id}_{safe_stem}.csv"
+        temp_file_path = user_dir / safe_filename
+        
+        # Write temporary CSV file on backend
+        temp_file_path.write_bytes(content)
+        storage_ref = str(temp_file_path.relative_to(self.uploads_root))
 
-        display_name = (dataset_name or Path(filename).stem or "Uploaded dataset").strip()[:255]
+        display_name = (dataset_name or safe_stem or "Uploaded dataset").strip()[:255]
         self.registry.create_dataset(
             dataset_id=dataset_id,
             user_id=user_id,
             dataset_name=display_name,
             original_filename=Path(filename).name,
             internal_table_name=internal_table,
-            storage_reference=drive_info["google_drive_file_id"],
-            google_drive_folder_id=drive_info["google_drive_folder_id"],
-            file_size=drive_info["file_size"],
+            storage_reference=storage_ref,
+            google_drive_folder_id=None,
+            file_size=len(content),
             status="VALIDATING",
             validation_status="pending",
         )
@@ -181,6 +180,11 @@ class DatasetManagementService:
             }
         except Exception as error:
             self.import_service.drop_table_if_exists(internal_table)
+            if temp_file_path.is_file():
+                try:
+                    temp_file_path.unlink()
+                except Exception:
+                    pass
             message = str(error)
             self.registry.update_dataset(
                 dataset_id,
@@ -188,13 +192,28 @@ class DatasetManagementService:
                 validation_status="invalid",
                 error_message=message[:2000],
             )
-            try:
-                drive_service.delete_file(drive_info["google_drive_file_id"])
-            except Exception:
-                pass
             if isinstance(error, (CSVValidationError, DatasetImportError, DatasetManagementError)):
                 raise
             raise DatasetManagementError(message) from error
+
+    def cleanup_temporary_files(self, max_age_hours: int = 24) -> int:
+        """
+        Automatic cleanup of abandoned temporary dataset files.
+        Removes temporary CSV files older than max_age_hours.
+        """
+        import time
+        now = time.time()
+        max_age_seconds = max_age_hours * 3600
+        cleaned = 0
+        if self.uploads_root.exists():
+            for p in self.uploads_root.rglob("*.csv"):
+                try:
+                    if (now - p.stat().st_mtime) > max_age_seconds:
+                        p.unlink(missing_ok=True)
+                        cleaned += 1
+                except Exception:
+                    pass
+        return cleaned
 
     def _validate_upload(self, filename: str, content: bytes) -> None:
         if not filename.lower().endswith(".csv"):
@@ -252,6 +271,7 @@ class DatasetManagementService:
         }
 
     def _public_summary(self, record: Any) -> dict[str, Any]:
+        created_at_val = record.created_at.isoformat() if hasattr(record.created_at, "isoformat") else str(record.created_at)
         return {
             "dataset_id": record.dataset_id,
             "dataset_name": record.dataset_name,
@@ -261,5 +281,5 @@ class DatasetManagementService:
             "column_count": record.column_count,
             "status": record.status,
             "is_builtin": record.is_builtin,
-            "created_at": record.created_at.isoformat(),
+            "created_at": created_at_val,
         }

@@ -58,11 +58,11 @@ class DatabaseConfig:
         database_name = str(raw["database"] or "")
         running_pytest = "PYTEST_CURRENT_TEST" in os.environ
         if running_pytest and os.getenv("ASKMYDATA_USE_CONFIGURED_DB_IN_TESTS") != "1":
-            project_root = Path(__file__).resolve().parents[1]
-            sqlite_dir = project_root / ".pytest-tmp"
+            # Use system tempdir to avoid Windows long-path + special-char issues with sqlite3
+            sqlite_dir = Path(tempfile.gettempdir()) / "askmydata_pytest"
             sqlite_dir.mkdir(parents=True, exist_ok=True)
             test_name = os.environ["PYTEST_CURRENT_TEST"].split(" (", 1)[0]
-            sqlite_path = sqlite_dir / f"askmydata_pytest_{uuid.uuid5(uuid.NAMESPACE_URL, test_name).hex}.sqlite3"
+            sqlite_path = sqlite_dir / f"amd_{uuid.uuid5(uuid.NAMESPACE_URL, test_name).hex}.sqlite3"
             raw["user"] = "sqlite"
             raw["password"] = ""
             raw["database"] = str(sqlite_path)
@@ -78,22 +78,15 @@ class DatabaseConfig:
             and not database_name.startswith("YOUR_")
         )
 
-        if (
+        if not (running_pytest and os.getenv("ASKMYDATA_USE_CONFIGURED_DB_IN_TESTS") != "1") and (
             raw["database"] in (None, "")
             or database_name.startswith("YOUR_")
             or is_sqllite_db_name
-            or (running_pytest and raw["user"] == "sqlite" and is_sqlite_file)
         ):
-            if running_pytest:
-                project_root = Path(__file__).resolve().parents[1]
-                sqlite_dir = project_root / ".pytest-tmp"
-                sqlite_dir.mkdir(parents=True, exist_ok=True)
-                sqlite_path = sqlite_dir / f"askmydata_pytest_{uuid.uuid4().hex}.sqlite3"
-            else:
-                project_root = Path(__file__).resolve().parents[1]
-                sqlite_dir = project_root / "data"
-                sqlite_dir.mkdir(parents=True, exist_ok=True)
-                sqlite_path = sqlite_dir / "askmydata.sqlite3"
+            project_root = Path(__file__).resolve().parents[1]
+            sqlite_dir = project_root / "data"
+            sqlite_dir.mkdir(parents=True, exist_ok=True)
+            sqlite_path = sqlite_dir / "askmydata.sqlite3"
             raw["database"] = str(sqlite_path)
 
         try:

@@ -1,4 +1,4 @@
-"""FastAPI application entry point for AskMyData Phase 16 (Monitoring, Analytics & Feedback)."""
+"""FastAPI application entry point for AwanAI (formerly AskMyData)."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.api.dependencies import get_monitoring_service
-from backend.api.routes import admin, ai, analytics, auth, automations, billing, chat, dataset, datasets, developer, feedback, health, nlsql, search, visualization, workspaces
+from backend.api.routes import admin, ai, analytics, auth, automations, billing, chat, dataset, datasets, developer, feedback, health, nlsql, search, visualization, visitors, workspaces
 from backend.core.config import settings
 from backend.core.logging import configure_logging
 from backend.exceptions.handlers import AppError, app_error_handler, unexpected_error_handler, validation_error_handler
@@ -23,9 +23,9 @@ configure_logging(settings.log_level)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
-    title="AskMyData API",
+    title="AwanAI API",
     version="1.0.0",
-    description="AI-powered Natural Language Data Analytics Platform API.",
+    description="AwanAI – AI-powered Natural Language Data Analytics Platform API.",
     docs_url="/docs" if settings.app_env != "production" else None,
     redoc_url="/redoc" if settings.app_env != "production" else None,
 )
@@ -47,6 +47,7 @@ app.add_exception_handler(Exception, unexpected_error_handler)
 
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(visitors.router, prefix="/api/v1")
 app.include_router(dataset.router, prefix="/api/v1")
 app.include_router(datasets.router, prefix="/api/v1")
 app.include_router(analytics.router, prefix="/api/v1")

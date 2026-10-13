@@ -46,10 +46,21 @@ class UnsupportedQuestionError(RuntimeError):
     pass
 
 
+# Valid Gemini model names to try in order (most capable to fallback)
+# gemini-flash-lite-latest and gemini-3.1-flash-lite confirmed working on free tier
+_GEMINI_FALLBACK_MODELS = [
+    "gemini-3.8-flash",
+    "gemini-flash-lite-latest",
+    "gemini-3.1-flash-lite",
+    "gemini-3.1-flash-lite-preview",
+]
+
+
 class GeminiService:
     def __init__(self, client: Any | None = None, model: str | None = None) -> None:
         self.api_key = os.getenv("GEMINI_API_KEY", "")
-        self.model = model or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        chosen_model = model or os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+        self.model = chosen_model
         self._client = client
 
     @property
@@ -83,6 +94,16 @@ class GeminiService:
         self.validate_plan(plan, schema_context)
         return plan
 
+    def general_answer(self, question: str) -> ExplanationPayload:
+        """Answer general knowledge / math questions without running dataset analytics."""
+        prompt = self._read_prompt("general_answer.txt").format(question=question.strip())
+        raw = self._generate_json(prompt, ExplanationPayload, temperature=0.4)
+        try:
+            return ExplanationPayload.model_validate(raw)
+        except ValidationError as error:
+            logger.warning("gemini_invalid_general_answer raw=%s", raw)
+            raise AIServiceError("Gemini returned an invalid answer.") from error
+
     def explain(self, question: str, operation: str, result: Any, warnings: list[str]) -> ExplanationPayload:
         """Generate a natural-language explanation for a verified analytics result."""
         prompt = self._read_prompt("result_explainer.txt").format(
@@ -108,6 +129,23 @@ class GeminiService:
         - filters referencing columns not present in the dataset
         - NOTE: We no longer blanket-reject filters — we validate each one against schema
         """
+        if plan.answer_mode == "general":
+            if plan.operation != "general_answer":
+                raise UnsupportedQuestionError(
+                    "General questions must use operation 'general_answer'."
+                )
+            return
+        if plan.operation == "custom_analytics":
+            if not plan.pandas_script or not plan.pandas_script.strip():
+                raise UnsupportedQuestionError(
+                    "Custom analytics requires a pandas_script that assigns `result`."
+                )
+            from analytics.safe_pandas import UnsafeAnalyticsScript, _validate_script
+
+            try:
+                _validate_script(plan.pandas_script)
+            except UnsafeAnalyticsScript as error:
+                raise UnsupportedQuestionError(str(error)) from error
         if plan.intent == "unsupported":
             raise UnsupportedQuestionError(
                 "This question cannot be answered using the current dataset and approved analytics."
@@ -127,39 +165,74 @@ class GeminiService:
                 f"The current dataset does not contain the requested column(s): {', '.join(invalid_filters)}."
             )
 
-    def _generate_json(self, prompt: str, schema: type[Any]) -> dict[str, Any]:
+    @staticmethod
+    def _clean_schema(schema: type[Any]) -> dict[str, Any]:
+        """Convert a Pydantic model to a Gemini-compatible JSON schema.
+
+        Gemini's response_schema does not accept:
+        - additionalProperties (raises 400 Bad Request)
+        - title fields (raises 400 Bad Request)
+        We strip these recursively before sending.
+        """
+        raw: dict[str, Any] = schema.model_json_schema()
+
+        def _strip(obj: Any) -> Any:
+            if isinstance(obj, dict):
+                return {
+                    k: _strip(v)
+                    for k, v in obj.items()
+                    if k not in ("additionalProperties", "title")
+                }
+            if isinstance(obj, list):
+                return [_strip(item) for item in obj]
+            return obj
+
+        return _strip(raw)
+
+    def _generate_json(self, prompt: str, schema: type[Any], *, temperature: float = 0.1) -> dict[str, Any]:
         started = time.perf_counter()
-        try:
-            response = self.client.models.generate_content(
-                model=self.model,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=schema,
-                    temperature=0.1,
-                ),
-            )
-            text = getattr(response, "text", None)
-            if not text:
-                raise AIServiceError("Gemini returned an empty response.")
-            value = json.loads(text)
-            if not isinstance(value, dict):
-                raise AIServiceError("Gemini returned a non-object response.")
-            logger.info(
-                "gemini_request_success model=%s duration_ms=%.2f",
-                self.model,
-                (time.perf_counter() - started) * 1000,
-            )
-            return value
-        except AIServiceError:
-            raise
-        except Exception as error:
-            status = getattr(error, "status_code", None) or getattr(error, "code", None)
-            if status == 429:
-                logger.warning("gemini_rate_limited model=%s", self.model)
-                raise AIServiceError("AI rate limit reached. Please wait a moment and try again.") from error
-            logger.warning("gemini_request_failed model=%s error=%s", self.model, type(error).__name__)
-            raise AIServiceError("AI service is temporarily unavailable. Please try again.") from error
+        clean_schema = self._clean_schema(schema)
+
+        models_to_try = [self.model]
+        for candidate in _GEMINI_FALLBACK_MODELS:
+            if candidate not in models_to_try:
+                models_to_try.append(candidate)
+
+        last_error = None
+        for attempt_model in models_to_try:
+            try:
+                response = self.client.models.generate_content(
+                    model=attempt_model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=clean_schema,
+                        temperature=temperature,
+                    ),
+                )
+                text = getattr(response, "text", None)
+                if not text:
+                    continue
+                value = json.loads(text)
+                if isinstance(value, dict):
+                    logger.info(
+                        "gemini_request_success model=%s duration_ms=%.2f",
+                        attempt_model,
+                        (time.perf_counter() - started) * 1000,
+                    )
+                    return value
+            except Exception as error:
+                last_error = error
+                logger.warning(
+                    "gemini_request_retry model=%s error=%s (%s), trying next available model...",
+                    attempt_model,
+                    type(error).__name__,
+                    error,
+                )
+                time.sleep(0.5)
+
+        logger.error("All Gemini candidate models failed. Last error: %s", last_error)
+        raise AIServiceError("AI service is temporarily unavailable. Please try again.") from last_error
 
     @staticmethod
     def _read_prompt(name: str) -> str:
@@ -219,5 +292,11 @@ def schema_context_from_dataframe(dataframe: Any, dataset_name: str = "") -> dic
             pass
     if numeric_summary:
         context["numeric_summary"] = numeric_summary
+
+    try:
+        import numpy as np
+        context["sample_records"] = dataframe.head(4).replace({np.nan: None}).to_dict(orient="records")
+    except Exception:
+        pass
 
     return context

@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "C:\Users\Lenovo\Desktop\my all\code\projects\AI-powered Natural Language Data Analytics Platform\tests\test_awanai_visitor_and_temporary_storage.py", line 73, in test_visitor_session_token_and_dataset_isolation
+    assert list_a.status_code == 200, f"List A failed: {list_a.text}"
+AssertionError: List A failed: {"error":"datasets_unavailable","detail":"Datasets could not be listed."}
+assert 503 == 200
+ +  where 503 = <Response [503 Service Unavailable]>.status_code

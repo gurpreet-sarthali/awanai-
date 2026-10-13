@@ -63,7 +63,7 @@ export const UserFeedbackModal: React.FC<UserFeedbackModalProps> = ({ isOpen, to
             {error && <div className="feedback-error">{error}</div>}
 
             <div className="form-group">
-              <label>How satisfied are you with AskMyData?</label>
+              <label>How satisfied are you with AwanAI?</label>
               <div className="rating-stars">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <button

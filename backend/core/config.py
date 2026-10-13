@@ -21,7 +21,7 @@ class AppSettings:
     app_env: str = "development"
     log_level: str = "INFO"
     cors_origins: tuple[str, ...] = ("http://localhost:5173", "http://127.0.0.1:5173")
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.8-flash"
     ai_max_requests_per_minute: int = 10
     ai_max_requests_per_day: int = 100
     max_result_rows: int = 1000
@@ -85,7 +85,7 @@ class AppSettings:
             app_env=os.getenv("APP_ENV", "development"),
             log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
             cors_origins=origins or ("http://localhost:5173", "http://127.0.0.1:5173"),
-            gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+            gemini_model=os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
             ai_max_requests_per_minute=int(os.getenv("AI_MAX_REQUESTS_PER_MINUTE", "10")),
             ai_max_requests_per_day=int(os.getenv("AI_MAX_REQUESTS_PER_DAY", "100")),
             max_result_rows=int(os.getenv("MAX_RESULT_ROWS", "1000")),

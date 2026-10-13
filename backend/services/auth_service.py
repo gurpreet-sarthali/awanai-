@@ -48,15 +48,43 @@ class AuthService:
 
     def resolve_token(self, token: str) -> UserRecord:
         try:
+            from datetime import datetime, timezone
             from backend.core.security import decode_access_token
 
             decoded = decode_access_token(token, secret=settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
-            user = self.users.get_by_id(str(decoded["sub"]))
+            user_id = str(decoded["sub"])
+            try:
+                user = self.users.get_by_id(user_id)
+            except UserNotFoundError:
+                if decoded.get("is_visitor"):
+                    now = datetime.now(timezone.utc)
+                    return UserRecord(
+                        id=user_id,
+                        email=str(decoded.get("email", f"{user_id}@visitor.awanai.local")),
+                        name=str(decoded.get("name", "Visitor")),
+                        password_hash=None,
+                        is_active=True,
+                        is_admin=False,
+                        created_at=now,
+                        updated_at=now,
+                        last_login_at=now,
+                    )
+                raise
         except (jwt.PyJWTError, UserNotFoundError, KeyError) as error:
             raise AuthenticationError("Invalid or expired authentication token.") from error
         if not user.is_active:
             raise AuthenticationError("This account is inactive.")
         return user
+
+    def issue_visitor_token(self, visitor_id: str, name: str, email: str) -> str:
+        """Issue a temporary session JWT for an unverified visitor."""
+        return create_access_token(
+            subject=visitor_id,
+            secret=settings.jwt_secret_key,
+            algorithm=settings.jwt_algorithm,
+            expires_minutes=settings.access_token_expire_minutes * 24,
+            extra={"is_visitor": True, "name": name, "email": email},
+        )
 
     def issue_token(self, user: UserRecord) -> str:
         return create_access_token(

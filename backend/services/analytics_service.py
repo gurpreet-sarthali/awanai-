@@ -1,6 +1,7 @@
 from typing import Any
 
 from analytics.cleaning import copy_for_analysis
+from analytics.filters import apply_filters
 from analytics.comparisons import comparison_metrics
 from analytics.generic_analytics import run_generic_operation
 from analytics.grouping import grouped_analytics
@@ -29,9 +30,21 @@ GENERIC_OPERATIONS = {
     "sum",
     "value_counts",
     "group_average",
+    "data_quality_report",
+    "impute_missing_values",
+    "correlation",
+    "trend",
+    "median",
+    "describe",
+    "std",
+    "variance",
+    "percentile",
+    "custom_analytics",
 }
 
-ALLOWED_OPERATIONS = ALLOWED_PLACEMENT_OPERATIONS | GENERIC_OPERATIONS | {"summary", "placement"}
+GENERAL_OPERATIONS = {"general_answer"}
+
+ALLOWED_OPERATIONS = ALLOWED_PLACEMENT_OPERATIONS | GENERIC_OPERATIONS | GENERAL_OPERATIONS | {"summary", "placement"}
 
 
 class InvalidAnalyticsOperation(ValueError):
@@ -103,14 +116,27 @@ class AnalyticsService:
         dataset_id: str = DEMO_PLACEMENT_DATASET_ID,
         column: str | None = None,
         group_by: str | None = None,
+        numeric_param: float | None = None,
+        pandas_script: str | None = None,
+        filters: list[Any] | None = None,
     ) -> dict[str, Any] | list[Any] | float | int:
         if operation not in ALLOWED_OPERATIONS:
             raise InvalidAnalyticsOperation(f"Unsupported analytics operation: {operation}")
+        if operation in GENERAL_OPERATIONS:
+            raise InvalidAnalyticsOperation("General questions are answered by the AI layer, not the analytics engine.")
+        dataframe = apply_filters(self._load(dataset_id), filters or [])
         if operation in GENERIC_OPERATIONS or operation == "overview":
-            return run_generic_operation(self._load(dataset_id), operation, column, group_by)
+            return run_generic_operation(
+                dataframe,
+                operation,
+                column,
+                group_by,
+                numeric_param=numeric_param,
+                pandas_script=pandas_script,
+            )
         if operation in {"summary", "placement"}:
             return self.summary(dataset_id) if operation == "summary" else self.placement(dataset_id)
-        if not self._supports_placement_analytics(self._load(dataset_id)):
+        if not self._supports_placement_analytics(dataframe):
             raise InvalidAnalyticsOperation(f"Operation `{operation}` is not supported for this dataset.")
         values = self._all(dataset_id)
         if operation == "overall_placement_rate":

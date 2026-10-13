@@ -1,4 +1,8 @@
+import logging
+
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+
+logger = logging.getLogger(__name__)
 
 from backend.api.dependencies import get_current_user, get_dataset_management_service, get_monitoring_service, get_repository
 from backend.core.user_model import UserRecord
@@ -40,6 +44,7 @@ async def upload_dataset(
         monitoring_service.track_event(current_user.id, "dataset_upload_failed", {"filename": file.filename})
         raise AppError(400, "invalid_dataset_upload", str(error)) from error
     except Exception as error:
+        logger.error("UPLOAD EXCEPTION OCCURRED: %s", error, exc_info=True)
         monitoring_service.track_event(current_user.id, "dataset_upload_failed", {"filename": file.filename})
         raise AppError(503, "dataset_upload_failed", "The dataset could not be uploaded.") from error
 

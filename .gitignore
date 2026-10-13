@@ -7,3 +7,5 @@ frontend/dist/
 analytics/results/placement_analytics.json
 visualization/results/*.png
 visualization/results/chart_manifest.json
+.pytest-tmp/
+.pytest-tmp/

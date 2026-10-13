@@ -103,9 +103,45 @@ class VisualizationService:
             dataset_id,
         )
 
+    def generate_custom_chart(
+        self,
+        dataframe: pd.DataFrame,
+        chart_type: str = "bar",
+        x: str | None = None,
+        y: str | None = None,
+        title: str = "Data Visualization",
+        filename: str | None = None,
+    ) -> dict[str, Any]:
+        if chart_type not in {"bar", "line", "pie", "histogram", "scatter", "box"}:
+            chart_type = "bar"
+
+        cols = list(dataframe.columns)
+        if not cols:
+            raise ValueError("Cannot generate chart from empty DataFrame.")
+
+        resolved_x = x if x in cols else cols[0]
+        if y and y in cols:
+            resolved_y = y
+        else:
+            numeric_cols = [c for c in cols if pd.api.types.is_numeric_dtype(dataframe[c])]
+            resolved_y = numeric_cols[0] if numeric_cols else (cols[1] if len(cols) > 1 else cols[0])
+
+        import uuid
+        spec = {
+            "chart_type": chart_type,
+            "x": resolved_x,
+            "y": resolved_y,
+            "title": title or "Analytics Chart",
+            "x_label": resolved_x,
+            "y_label": resolved_y,
+            "filename": filename or f"custom_{uuid.uuid4().hex[:8]}_{chart_type}.png",
+        }
+        return self._render(dataframe, spec, "custom_query")
+
     def _render(self, dataframe: pd.DataFrame, specification: dict[str, Any], dataset_id: str) -> dict[str, Any]:
         result = create_chart(dataframe, specification, self.output_dir)
         if not result.get("success"):
             raise RuntimeError("Visualization generation failed: " + "; ".join(result.get("errors", [])))
         result["data_source"] = dataset_id
         return result
+

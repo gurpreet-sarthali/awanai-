@@ -452,6 +452,22 @@ class DatasetRegistryRepository:
         return dataset
 
 
+def _parse_datetime(value: Any) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except Exception:
+            try:
+                from datetime import datetime as dt
+                return dt.strptime(value, "%Y-%m-%d %H:%M:%S")
+            except Exception:
+                pass
+    from datetime import timezone
+    return datetime.now(timezone.utc)
+
+
 def _record_from_row(row: Any) -> DatasetRecord:
     if not isinstance(row, dict):
         row = {key: row[key] for key in row.keys()}
@@ -470,6 +486,6 @@ def _record_from_row(row: Any) -> DatasetRecord:
         is_builtin=bool(row["is_builtin"]),
         validation_status=row["validation_status"],
         error_message=row.get("error_message"),
-        created_at=row["created_at"],
-        updated_at=row["updated_at"],
+        created_at=_parse_datetime(row.get("created_at")),
+        updated_at=_parse_datetime(row.get("updated_at")),
     )

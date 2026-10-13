@@ -1,7 +1,8 @@
-"""Question-to-plan-to-explanation orchestration for Phase 7."""
+"""Question-to-plan-to-explanation orchestration."""
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from analytics.validation import validate_data
@@ -14,6 +15,27 @@ from .gemini_service import GeminiService, schema_context_from_dataframe
 from .rate_limiter import AIRateLimiter
 from .dataset_access_service import DatasetAccessService
 from .visualization_service import VisualizationService
+
+logger = logging.getLogger(__name__)
+
+# Operations that work directly on the dataframe without placement constraints
+_DATA_OPS = {
+    "data_quality_report",
+    "impute_missing_values",
+    "correlation",
+    "trend",
+    "overview",
+    "count",
+    "average",
+    "minimum",
+    "maximum",
+    "sum",
+    "value_counts",
+    "group_average",
+    "median",
+    "describe",
+    "summary",
+}
 
 
 class AIOrchestrationService:
@@ -49,21 +71,83 @@ class AIOrchestrationService:
         dataframe = self.repository.load_dataframe(dataset_id)
         validation = validate_data(dataframe) if dataset_id == DEMO_PLACEMENT_DATASET_ID else {"warnings": []}
         schema_context = schema_context_from_dataframe(dataframe)
+
+        # Rate limit check before AI call
         self.rate_limiter.check(user_id=user_id)
         plan = self.gemini_service.plan(question, schema_context)
-        actual_result = self.analytics_service.run_operation(plan.operation, dataset_id=dataset_id)
-        warnings = list(validation["warnings"])
-        warnings.append("This analysis shows observed association and does not establish causation.")
 
+        if plan.answer_mode == "general" or plan.operation == "general_answer":
+            self.rate_limiter.check(user_id=user_id)
+            explanation = self.gemini_service.general_answer(question)
+            return AIAnalysisResponse(
+                question=question,
+                answer=explanation.answer,
+                metrics={"mode": "general_answer"},
+                chart=None,
+                insights=explanation.insights,
+                recommendations=explanation.recommendations,
+                warnings=explanation.warnings,
+                analysis={
+                    "operation": "general_answer",
+                    "answer_mode": "general",
+                    "filters": [],
+                    "chart_type": None,
+                    "needs_chart": False,
+                },
+            )
+
+        column = getattr(plan, "column", None)
+        group_by = getattr(plan, "group_by", None)
+        numeric_param = getattr(plan, "numeric_param", None)
+        pandas_script = getattr(plan, "pandas_script", None)
+        if not column and plan.filters:
+            column = plan.filters[0].field
+
+        # Execute the analytics operation
+        actual_result = self.analytics_service.run_operation(
+            plan.operation,
+            dataset_id=dataset_id,
+            column=column,
+            group_by=group_by,
+            numeric_param=numeric_param,
+            pandas_script=pandas_script,
+            filters=plan.filters,
+        )
+
+        warnings = list(validation.get("warnings", []))
+        if plan.operation != "custom_analytics":
+            warnings.append("This analysis shows observed association and does not establish causation.")
+
+        # Generate chart only when requested AND operation supports it
         chart: dict[str, Any] | None = None
-        if plan.needs_chart:
+        chart_supported_ops = {
+            "average", "minimum", "maximum", "sum", "value_counts",
+            "group_average", "trend", "correlation", "custom_analytics",
+            "overall_placement_rate", "placement_by_internship",
+            "placement_by_cgpa_group", "placement_by_project_group",
+            "placement_by_communication", "average_metrics_by_placement",
+        }
+        if plan.needs_chart and plan.operation in chart_supported_ops:
             if not plan.chart_type:
-                raise ValueError("Gemini requested a chart without selecting a chart type.")
-            chart = self.visualization_service.generate(plan.chart_type, plan.operation, dataset_id=dataset_id)
+                warnings.append("No chart type was specified; skipping chart generation.")
+            else:
+                try:
+                    chart = self.visualization_service.generate(
+                        plan.chart_type,
+                        plan.operation,
+                        dataset_id=dataset_id,
+                        column=column,
+                        group_by=group_by,
+                    )
+                except Exception as chart_err:
+                    logger.warning("chart_generation_failed op=%s err=%s", plan.operation, chart_err)
+                    warnings.append(f"Chart could not be generated: {chart_err}")
 
+        # Rate limit check before second AI call
         self.rate_limiter.check(user_id=user_id)
         explanation = self.gemini_service.explain(question, plan.operation, actual_result, warnings)
         merged_warnings = list(dict.fromkeys([*warnings, *explanation.warnings]))
+
         return AIAnalysisResponse(
             question=question,
             answer=explanation.answer,

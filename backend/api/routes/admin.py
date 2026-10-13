@@ -129,6 +129,40 @@ def get_workspace_security_events(
     ]
 
 
+@router.get("/visitors/stats")
+def get_visitor_stats(
+    admin_user: UserRecord = Depends(require_admin_user),
+) -> dict[str, Any]:
+    """Get aggregate visitor registration counts from Supabase visitors table."""
+    stats: dict[str, Any] = {
+        "total_visitors": 0,
+        "visitors_today": 0,
+        "visitors_last_7_days": 0,
+        "supabase_connected": False,
+    }
+    try:
+        from backend.services.visitor_service import _get_supabase_client
+        from datetime import datetime, timezone, timedelta
+        client = _get_supabase_client()
+
+        now = datetime.now(timezone.utc)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        week_start = (now - timedelta(days=7)).isoformat()
+
+        total_res = client.table("visitors").select("id", count="exact").execute()
+        today_res = client.table("visitors").select("id", count="exact").gte("created_at", today_start).execute()
+        week_res = client.table("visitors").select("id", count="exact").gte("created_at", week_start).execute()
+
+        stats["total_visitors"] = getattr(total_res, "count", 0) or 0
+        stats["visitors_today"] = getattr(today_res, "count", 0) or 0
+        stats["visitors_last_7_days"] = getattr(week_res, "count", 0) or 0
+        stats["supabase_connected"] = True
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("visitor_stats_unavailable error=%s", exc)
+    return stats
+
+
 @router.post("/retention/cleanup")
 def trigger_retention_cleanup(
     payload: AdminCleanupRequest,

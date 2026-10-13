@@ -49,6 +49,25 @@ _search_repository: SearchRepository | None = None
 _search_service: SearchService | None = None
 
 
+def reset_dependency_singletons() -> None:
+    global _registry, _users, _auth_service, _monitoring_service, _billing_service
+    global _automation_service, _developer_repository, _developer_api_service
+    global _webhook_service, _search_repository, _search_service, _workspace_repository, _chat_repository
+    _registry = None
+    _users = None
+    _auth_service = None
+    _monitoring_service = None
+    _billing_service = None
+    _automation_service = None
+    _developer_repository = None
+    _developer_api_service = None
+    _webhook_service = None
+    _search_repository = None
+    _search_service = None
+    _workspace_repository = None
+    _chat_repository = None
+
+
 def get_user_repository() -> UserRepository:
     global _users
     if _users is None:
@@ -72,6 +91,7 @@ def get_registry() -> DatasetRegistryRepository:
             registry.ensure_schema()
             users.migrate_dataset_ownership()
         except Exception as error:
+            logger.error("Dataset registry initialization error: %s", error, exc_info=True)
             raise AppError(503, "dataset_registry_unavailable", "The dataset registry could not be initialized.") from error
         _registry = registry
     return _registry

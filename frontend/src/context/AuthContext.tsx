@@ -29,7 +29,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setUser(await getCurrentUser());
     } catch {
-      clearAccessToken();
+      if (!localStorage.getItem('awanai.visitorSession')) {
+        clearAccessToken();
+      }
       setUser(null);
     } finally {
       setIsLoading(false);

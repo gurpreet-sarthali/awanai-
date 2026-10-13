@@ -43,3 +43,14 @@ export async function triggerLogCleanup(_token: string, usageDays: number = 90, 
     body: JSON.stringify({ usage_retention_days: usageDays, error_retention_days: errorDays }),
   });
 }
+
+export interface VisitorStats {
+  total_visitors: number;
+  visitors_today: number;
+  visitors_last_7_days: number;
+  supabase_connected: boolean;
+}
+
+export async function getVisitorStats(_token: string): Promise<VisitorStats> {
+  return apiFetch<VisitorStats>('/api/v1/admin/visitors/stats', { method: 'GET' });
+}

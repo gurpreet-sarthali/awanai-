@@ -396,7 +396,7 @@ function WebhooksPanel({ workspaceId }: { workspaceId: string }) {
         <div className="dev-create-form">
           <div className="dev-form-group">
             <label>Endpoint URL (HTTPS only)</label>
-            <input type="url" value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)} placeholder="https://your-app.com/webhooks/askmydata" className="dev-input" />
+            <input type="url" value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)} placeholder="https://your-app.com/webhooks/awanai" className="dev-input" />
           </div>
           <div className="dev-form-group">
             <label>Description (optional)</label>

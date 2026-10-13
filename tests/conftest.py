@@ -4,9 +4,16 @@ from datetime import UTC, datetime
 
 import pytest
 
-from backend.api.dependencies import get_current_user
+from backend.api.dependencies import get_current_user, reset_dependency_singletons
 from backend.core.user_model import UserRecord
 from backend.main import app
+
+
+@pytest.fixture(autouse=True)
+def clean_dependencies():
+    reset_dependency_singletons()
+    yield
+    reset_dependency_singletons()
 
 
 @pytest.fixture
@@ -27,7 +34,10 @@ def test_user() -> UserRecord:
 
 
 @pytest.fixture(autouse=True)
-def authenticate_tests(test_user: UserRecord):
+def authenticate_tests(request, test_user: UserRecord):
+    if "no_auth_mock" in request.keywords:
+        yield
+        return
     app.dependency_overrides[get_current_user] = lambda: test_user
     yield
     app.dependency_overrides.pop(get_current_user, None)

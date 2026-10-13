@@ -146,10 +146,17 @@ class UserRepository:
 
 
     def migrate_dataset_ownership(self) -> None:
-        connection = connect(self.config)
+        try:
+            connection = connect(self.config)
+        except Exception:
+            return
         try:
             cursor = connection.cursor()
-            if self.config.uses_sqlite:
+            is_sqlite = self.config.uses_sqlite or "SQLite" in type(connection).__name__ or type(connection).__module__ == "sqlite3"
+            if is_sqlite:
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='datasets'")
+                if not cursor.fetchone():
+                    return
                 existing_cols = {row[1] for row in cursor.execute("PRAGMA table_info(datasets)").fetchall()}
                 if "user_id" not in existing_cols:
                     cursor.execute("ALTER TABLE datasets ADD COLUMN user_id TEXT NULL")
@@ -164,6 +171,15 @@ class UserRepository:
                     )
                     connection.commit()
             else:
+                cursor.execute(
+                    """
+                    SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+                    WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'datasets'
+                    """,
+                    (self.config.database,),
+                )
+                if int(cursor.fetchone()[0]) == 0:
+                    return
                 cursor.execute(
                     """
                     SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
@@ -184,8 +200,13 @@ class UserRepository:
                     )
                     connection.commit()
             cursor.close()
+        except Exception:
+            pass
         finally:
-            connection.close()
+            try:
+                connection.close()
+            except Exception:
+                pass
 
     def create_user(self, *, email: str, name: str, password_hash: str | None, google_id: str | None = None, profile_picture_url: str | None = None, is_admin: bool = False) -> UserRecord:
         from backend.core.config import settings
